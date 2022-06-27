@@ -28,4 +28,5 @@ resource "aws_lambda_function" "process_purchase_lambda" {
   role    = aws_iam_role.iam_role_process_purchase.arn
   handler = "index.handler"
   runtime = "${var.runtimeEnv}"
+  timeout = "300"
 }
