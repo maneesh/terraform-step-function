@@ -1,0 +1,21 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "lambdarole",
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "lambda.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+        },
+        {
+            "Sid": "statesrole",
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "states.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+        }
+    ]
+}

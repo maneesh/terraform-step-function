@@ -1,54 +1,76 @@
-resource "aws_iam_role" "iam_role_transaction_step_function" {
-  name               = "iam_role_step_function"
-  assume_role_policy = "${file("iam/step_function_policy.json")}"
-}
-
-
-resource "aws_iam_policy" "policy_invoke_lambda" {
-  name        = "transactionStepFuncInvokeLambda"
-  policy = "${file("iam/invoke_lambda.json")}"
-}
-
-// Attach policy to IAM Role for Step Function
-resource "aws_iam_role_policy_attachment" "iam_for_sfn_attach_policy_invoke_lambda" {
-  role       = "${aws_iam_role.iam_role_transaction_step_function.name}"
-  policy_arn = "${aws_iam_policy.policy_invoke_lambda.arn}"
-}
-
 resource "aws_sfn_state_machine" "transaction_state_machine" {
   name     = "TransactionStateMachine"
-  role_arn = aws_iam_role.iam_role_transaction_step_function.arn
+  role_arn = "${aws_iam_role.iam_common_role.arn}"
   definition = <<EOF
   {
-    "Comment": "A simple AWS Step Functions state machine that automates a call center support session.",
-    "StartAt": "ProcessTransaction",
-    "States": {
-      "ProcessTransaction": {
+  "Comment": "An example of the Amazon States Language for starting a callback task.",
+  "StartAt": "Send Message To Queue",
+  "States": {
+    "Send Message To Queue": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+      "Parameters": {
+        "QueueUrl": "${aws_sqs_queue.transaction_queue.url}",
+        "MessageBody": {
+          "TransactionType.$": "$.TransactionType",
+          "TaskToken.$": "$$.Task.Token"
+        }
+      },
+      "Next": "ValidateTransactionType",
+      "Catch": [
+      {
+        "ErrorEquals": [ "States.ALL" ],
+        "Next": "Notify Failure"
+      }
+      ]
+    },
+    "Notify Failure": {
+      "Type": "Pass",
+      "Result": "Callback Task started by Step Functions failed",
+      "End": true
+    },
+    "ValidateTransactionType": {
           "Type" : "Choice",
           "Choices": [ 
             {
               "Variable": "$.TransactionType",
               "StringEquals": "PURCHASE",
-              "Next": "ProcessPurchase"
+              "Next": "Process Purchase"
             },
             {
               "Variable": "$.TransactionType",
               "StringEquals": "REFUND",
-              "Next": "ProcessRefund"
+              "Next": "Process Refund"
             }
         ]
       },
-       "ProcessRefund": {
+    "Process Purchase": {
+      "Type":"Task",
+      "Resource":"arn:aws:states:::lambda:invoke",
+      "Parameters":{  
+          "FunctionName":"processPurchase"
+       },
+      "End": true
+    },
+    "Process Refund": {
+      "Type": "Task",
+      "Resource":"arn:aws:states:::lambda:invoke",
+      "Parameters":{  
+          "FunctionName":"processPurchase"
+       },
+      "Next": "send Refund Notification"
+    },
+    "send Refund Notification": {
         "Type": "Task",
-        "Resource": "${aws_lambda_function.process_refund_lambda.arn}",
+        "Resource": "arn:aws:states:::sns:publish",
+        "Parameters": {
+            "TopicArn": "${aws_sns_topic.transaction_refund_update.arn}",
+            "Subject": "Refund Initiated",
+            "Message": "Your refund is initiated and will be credited to your wallet in next 2-4 working days"
+            },
         "End": true
-      },
-      "ProcessPurchase": {
-        "Type": "Task",
-        "Resource": "${aws_lambda_function.process_purchase_lambda.arn}",
-        "End": true
-      }
     }
   }
-  EOF
+}
+EOF
 }
