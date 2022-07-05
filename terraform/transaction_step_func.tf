@@ -18,6 +18,10 @@ resource "aws_sfn_state_machine" "transaction_state_machine" {
       },
       "Next": "ValidateTransactionType",
       "Catch": [
+         {
+        "ErrorEquals": [ "Error" ],
+        "Next": "Notify Failure"
+      },
       {
         "ErrorEquals": [ "States.ALL" ],
         "Next": "Notify Failure"
@@ -26,12 +30,17 @@ resource "aws_sfn_state_machine" "transaction_state_machine" {
     },
     "Notify Failure": {
       "Type": "Pass",
-      "Result": "Callback Task started by Step Functions failed",
+      "Result": "Execution Failed.",
       "End": true
     },
     "ValidateTransactionType": {
           "Type" : "Choice",
           "Choices": [ 
+             {
+              "Variable": "$.isValid",
+              "BooleanEquals": false,
+              "Next": "Notify Failure"
+            },
             {
               "Variable": "$.TransactionType",
               "StringEquals": "PURCHASE",
@@ -48,7 +57,10 @@ resource "aws_sfn_state_machine" "transaction_state_machine" {
       "Type":"Task",
       "Resource":"arn:aws:states:::lambda:invoke",
       "Parameters":{  
-          "FunctionName":"processPurchase"
+          "FunctionName":"processPurchase",
+          "Payload":{  
+               "TransactionType.$": "$.TransactionType"
+         }
        },
       "End": true
     },
@@ -56,7 +68,10 @@ resource "aws_sfn_state_machine" "transaction_state_machine" {
       "Type": "Task",
       "Resource":"arn:aws:states:::lambda:invoke",
       "Parameters":{  
-          "FunctionName":"processPurchase"
+          "FunctionName":"processPurchase",
+          "Payload":{  
+               "TransactionType.$": "$.TransactionType"
+         }
        },
       "Next": "send Refund Notification"
     },

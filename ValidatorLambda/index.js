@@ -8,8 +8,10 @@ exports.handler = (event, context, callback) => {
         const messageBody = JSON.parse(record.body);
         console.log("Message Body ", messageBody);
         const taskToken = messageBody.TaskToken;
+        const error = new Error("Invalid Input");
+        const isValid = ['REFUND','PURCHASE'].includes(messageBody.TransactionType);
         const params = {
-            output: JSON.stringify({ TransactionType: messageBody.TransactionType }),
+            output: JSON.stringify({ TransactionType: messageBody.TransactionType, isValid}),
             taskToken: taskToken
         };
 
